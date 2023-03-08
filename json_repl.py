@@ -38,6 +38,14 @@ class JsonREPL(Cmd):
         with open(self.dataf, "w") as f:
             json.dump(self.inner_data, f)
 
+    def get_value_from_keys(self, keys):
+        data = dict.copy(self.inner_data)
+        for key in keys:
+            if (type(data) != dict) or (key not in data):
+                return None
+            data = data[key]
+        return data
+
     def unfold_key(self, keys, data=None, set_to=None, rm=False):
         if data is None:
             data = dict.copy(self.inner_data)
@@ -62,7 +70,6 @@ class JsonREPL(Cmd):
             new_data = dict()
         else:
             return data[keys[0]]
-
         data[keys[0]] = self.unfold_key(keys[1:], data=new_data, set_to=set_to, rm=rm)
         return data
 
@@ -77,6 +84,44 @@ class JsonREPL(Cmd):
                 self.unfold_key(key.split("."), set_to=data, rm=rm)    # type: ignore [no-redef]
             )
         self.save()
+
+    # TODO  Finish
+    def filepick_completion(self, text):
+        if "/" in text:
+            print(text)
+            start_dir = os.path.join(os.path.curdir, "/".join(text.split("/")[:-1]))
+        else:
+            start_dir = os.path.curdir
+        for root, dirs, files in os.walk(start_dir):
+            return [
+                p for p in files if p.startswith(text)
+            ] + [
+                d + "/" for d in dirs if d.startswith(text)
+            ]
+
+    def format_completion(self, text, file_loader=False):
+        if file_loader:
+            return [k for k in FILE_LOADERS if k.startswith(text)]
+        else:
+            return [k for k in DATA_LOADERS if k.startswith(text)]
+
+    def dotkeys_completion(self, text):
+        prefix = text.split(".")[-1]
+        past_keys = text.split(".")[:-1]
+        data = self.get_value_from_keys(past_keys)
+        if not data:
+            return []
+        poss = [k for k in data if k.startswith(prefix)]
+        head = ".".join(past_keys)
+        head += "."*(len(head) > 0)
+        if len(poss) == 1:
+            if type(data[poss[0]]) != dict:
+                tail = " "
+            else:
+                tail = "."
+            return [ head + poss[0] + tail ]
+        else:
+            return [ head + k for k in poss ]
 
     def do_add(self, args):
         ''' Usage: add <key> <data> [format=fmt]
@@ -107,6 +152,15 @@ class JsonREPL(Cmd):
             return
         self.update_inner_data(key, data)
 
+    def complete_add(self, text, line, begidx, endidx):
+        return self.dotkeys_completion(text)
+
+    def complete_get(self, text, line, begidx, endidx):
+        return self.dotkeys_completion(text)
+
+    def complete_rm(self, text, line, begidx, endidx):
+        return self.dotkeys_completion(text)
+
     def do_get(self, args):
         ''' Usage: get <key>
         '''
@@ -114,15 +168,15 @@ class JsonREPL(Cmd):
         if len(args) < 1:
             print(json.dumps(self.inner_data, indent=2))
             return
-        key = args[0]
-        d = self.unfold_key(key.split("."))
+        key = args[0].rstrip(".")
+        d = self.get_value_from_keys(key.split("."))
         if not d:
             print(f"Key {key} doesn't point to any data yet")
             return
         if type(d) == dict:
             print(json.dumps(d, indent=2))
         else:
-            print(d, f"({type(d)})")
+            print(d)
 
     def do_rm(self, args):
         ''' Usage: rm <key>
@@ -133,6 +187,19 @@ class JsonREPL(Cmd):
             return
         key = args[0]
         self.update_inner_data(key, None, rm=True)
+
+    def complete_from_file(self, text, line, begidx, endidx):
+        nargs = len(line.split())
+        if line.endswith(" "):
+            nargs += 1
+        if nargs == 2:  # Complete the key
+            return self.dotkeys_completion(text)
+        elif nargs == 3:  # Complete the file
+            return self.filepick_completion(text)
+        elif nargs == 4:    # Complete the format
+            return self.format_completion(text, file_loader=True)
+        else:
+            return []
 
     def do_from_file(self, args):
         ''' Usage: from_file <key> <file path> <format>
