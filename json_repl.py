@@ -15,7 +15,7 @@ DATA_LOADERS = {
 }
 
 FILE_LOADERS = {
-    "text": ("r", lambda f: f.read()),
+    "text": ("r", lambda f: f.read().rstrip()),
     "json": ("r", lambda f: json.load(f)),
     "binary": ("rb", lambda f: base64.b64encode(f.read()).decode()),
 }
@@ -85,19 +85,21 @@ class JsonREPL(Cmd):
             )
         self.save()
 
-    # TODO  Finish
     def filepick_completion(self, text):
         if "/" in text:
-            print(text)
             start_dir = os.path.join(os.path.curdir, "/".join(text.split("/")[:-1]))
         else:
             start_dir = os.path.curdir
         for root, dirs, files in os.walk(start_dir):
-            return [
-                p for p in files if p.startswith(text)
+            poss = [
+                p for p in files if p.startswith(text.split("/")[-1])
             ] + [
                 d + "/" for d in dirs if d.startswith(text)
             ]
+            if len(poss) == 1 and (not poss[0].endswith("/")):
+                return [ poss[0] + " " ]
+            else:
+                return poss
 
     def format_completion(self, text, file_loader=False):
         if file_loader:
@@ -195,7 +197,7 @@ class JsonREPL(Cmd):
         if nargs == 2:  # Complete the key
             return self.dotkeys_completion(text)
         elif nargs == 3:  # Complete the file
-            return self.filepick_completion(text)
+            return self.filepick_completion(line.split()[2])
         elif nargs == 4:    # Complete the format
             return self.format_completion(text, file_loader=True)
         else:
