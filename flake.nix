@@ -13,10 +13,11 @@
     pythonpkg = python_version.withPackages (p: with p; [
     ]);
 
-    repl_script = pkgs.writeShellScript "json_repl" "${pythonpkg}/bin/python3 ./json_repl.py $@";
+    repl_script = pkgs.writeShellScript "json_repl" "${pythonpkg}/bin/python3 ${./json_repl.py} $@";
   in {
     # TODO    Add tool to overlay
     # overlays.default = prev: final: {};
+    packages.default = repl_script;
     apps.default = { type = "app"; program = "${repl_script}"; };
     devShells.default = pkgs.mkShell {
       buildInputs = [

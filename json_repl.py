@@ -86,20 +86,26 @@ class JsonREPL(Cmd):
         self.save()
 
     def filepick_completion(self, text):
-        if "/" in text:
+        if text.endswith("/"):
+            start_dir = os.path.join(os.path.curdir, text)
+        elif "/" in text:
             start_dir = os.path.join(os.path.curdir, "/".join(text.split("/")[:-1]))
         else:
             start_dir = os.path.curdir
-        for root, dirs, files in os.walk(start_dir):
-            poss = [
-                p for p in files if p.startswith(text.split("/")[-1])
-            ] + [
-                d + "/" for d in dirs if d.startswith(text)
-            ]
-            if len(poss) == 1 and (not poss[0].endswith("/")):
-                return [ poss[0] + " " ]
+        poss = list()
+        for path in os.listdir(start_dir):
+            if not path.startswith(text.split("/")[-1]):
+                continue
+            name = os.path.relpath(os.path.join(start_dir, path), start_dir).removeprefix("./")
+            assert os.path.exists(os.path.join(start_dir, name))
+            if os.path.isdir(os.path.join(start_dir, name)):
+                poss.append(name + "/")
             else:
-                return poss
+                poss.append(name)
+        if len(poss) == 1 and (not poss[0].endswith("/")):
+            return [ poss[0] + " " ]
+        else:
+            return poss
 
     def format_completion(self, text, file_loader=False):
         if file_loader:
@@ -197,7 +203,7 @@ class JsonREPL(Cmd):
         if nargs == 2:  # Complete the key
             return self.dotkeys_completion(text)
         elif nargs == 3:  # Complete the file
-            return self.filepick_completion(line.split()[2])
+            return self.filepick_completion(line.split(" ")[2])
         elif nargs == 4:    # Complete the format
             return self.format_completion(text, file_loader=True)
         else:
@@ -230,6 +236,12 @@ class JsonREPL(Cmd):
         self.update_inner_data(key, data)
 
     def do_EOF(self, args):
+        self.do_exit(args)
+
+    def do_quit(self, args):
+        self.do_exit(args)
+
+    def do_exit(self, args):
         print("")
         raise SystemExit
 
@@ -242,4 +254,7 @@ if __name__ == '__main__':
     args = parse_args()
     prompt = JsonREPL(args.json_file)
     prompt.prompt = '>>> '
-    prompt.cmdloop("")
+    try:
+        prompt.cmdloop("")
+    except KeyboardInterrupt:
+        prompt.do_EOF("")
