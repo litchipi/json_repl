@@ -245,6 +245,9 @@ class JsonREPL(Cmd):
         print("")
         raise SystemExit
 
+    def do_save(self, args):
+        self.save()
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("json_file", help="JSON file to save the data to")
